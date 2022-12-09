@@ -1,0 +1,18 @@
+# Nodejs
+node_modules/
+dist/
+
+# Docker
+.env
+
+# VSCode
+.vscode/
+
+# Log
+log/
+*.log
+
+# Temporary files
+*.cache
+*.tmp
+/temp/

@@ -1,0 +1,95 @@
+version: '3.8'
+
+services:
+  database:
+    image: mongo:6.0-focal
+    # restart: unless-stopped
+    configs:
+      - source: database-config
+        target: /etc/mongod.conf
+    volumes:
+      - ./log/mongodb/:/var/log/mongodb/
+      - configdb:/data/configdb
+      - database:/data/db
+    environment:
+      - MONGO_INITDB_ROOT_USERNAME
+      - MONGO_INITDB_ROOT_PASSWORD
+      - TZ
+    networks:
+      - backend
+    command: mongod --config /etc/mongod.conf
+
+  app-server:
+    build: ./server/app/
+    image: node-app-server:${COMPOSE_PROJECT_NAME}
+    # restart: unless-stopped
+    volumes:
+      - ./server/app/src/:/home/node/app/src/:ro
+    environment:
+      - MONGO_INITDB_ROOT_USERNAME
+      - MONGO_INITDB_ROOT_PASSWORD
+    expose:
+      - 80
+    networks:
+      - backend
+    depends_on:
+      - database
+    working_dir: /home/node/app/
+    command: "npm start"
+
+  web-server:
+    image: nginx:1.23.2-alpine
+    # restart: unless-stopped
+    configs:
+      - source: web-server-config
+        target: /etc/nginx/nginx.conf
+    volumes:
+      - ./log/nginx/:/var/log/nginx/
+      - ./client/asset/:/var/www/html/asset/:ro
+      - ./client/dist/:/var/www/html/dist/:ro
+    environment:
+      - TZ
+    ports:
+      - 80:80
+    networks:
+      - frontend
+      - backend
+    depends_on:
+      - database
+      - app-server
+
+  gen-env:
+    image: python:3-alpine
+    volumes:
+      - ./:/usr/src/app/
+    working_dir: /usr/src/app
+    command: python ./script/env.py
+    profiles:
+      - init
+
+  build-css:
+    build: ./client/
+    image: node-app-client:${COMPOSE_PROJECT_NAME}
+    volumes:
+      - ./client/:/home/node/app/client/
+      - ./server/app/src/view/:/home/node/app/server/app/src/view/:ro
+    working_dir: /home/node/app/client/
+    command: npm run build-tailwindcss -y
+    profiles:
+      - init
+
+configs:
+  database-config:
+    file: ./database/mongod.conf
+  web-server-config:
+    file: ./server/web/nginx.conf
+
+networks:
+  frontend:
+    driver: bridge
+  backend:
+    driver: bridge
+
+volumes:
+  configdb:
+  database:
